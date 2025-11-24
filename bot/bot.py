@@ -9,6 +9,8 @@ import database_of_activity
 import numpy as np
 from check_user_in_chat import check_user_in_chat_by_username
 import database_of_chat_users
+from find_geopos import OSMGeocoder
+from find_places import OSMPlacesFinder
 
 bot = Bot(token = token)
 dp = Dispatcher()
@@ -133,6 +135,29 @@ async def command_add(message: Message):
 
     except Exception as e:
         await message.answer(f"❌ Ошибка {str(e)}")
+
+@dp.message(Command("find_geopos"))
+async def command_find_geopos(message: Message):
+
+    address = message.text.replace("/find_geopos", "")
+    finder = OSMGeocoder()
+    coords = await finder.address_to_coordinates(address)
+    await message.answer(f"{coords}")
+
+@dp.message(Command("find_places_near"))
+async def command_find_places(message: Message):
+    address = message.text.replace("/find_places_near", "")
+    finder = OSMGeocoder()
+    coords = await finder.address_to_coordinates(address)
+    if not coords:
+        await message.answer("Некорректный адрес")
+        return
+    lat, lng = coords
+    finder2 = OSMPlacesFinder()
+    places = await finder2.get_top_5_places(lat, lng)
+    result_text = await finder2.format_results(places)
+
+    await message.answer(f"{result_text}", parse_mode="HTML")
 
 async def parse_time(date: str):
     today = datetime.now().date()

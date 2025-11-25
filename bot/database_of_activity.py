@@ -204,3 +204,12 @@ async def find_common_free_time(user_ids,days_range,workday_start = 9,workday_en
 
     return all_free_periods
 
+async def delete_activity(name_activity, user_id):
+    async with aiosqlite.connect("database.db") as db:
+        cursor = await db.execute('''
+        DELETE FROM schedules
+        WHERE user_id = ? AND activity_name = ?
+        LIMIT 1''', (user_id, name_activity))
+
+        await db.commit()
+        return cursor.rowcount

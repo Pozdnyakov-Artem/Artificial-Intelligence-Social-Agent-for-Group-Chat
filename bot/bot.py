@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher
 import asyncio
 from aiogram.filters import Command
 from future.backports.datetime import timedelta
-from arguments import token, description_commands, help_commands
+from arguments import token, description_commands, help_commands, example
 import database_of_activity
 import numpy as np
 from check_user_in_chat import check_user_in_chat_by_username
@@ -17,7 +17,7 @@ dp = Dispatcher()
 
 kb = ReplyKeyboardMarkup(resize_keyboard=True,
                          keyboard=[[KeyboardButton(text = '/help'),KeyboardButton(text = '/description')],
-                         [KeyboardButton(text = '/fa_fa_watafa'),KeyboardButton(text = '/Ruslanchik')]])
+                         [KeyboardButton(text = '/example')]])
 
 users = np.array([],dtype = int)
 
@@ -34,7 +34,7 @@ async def on_shutdown(bot: Bot):
 @dp.message(Command("start"))
 async def command_start(message: Message):
     await bot.send_message(message.chat.id,
-                        "<i>Всем привет я</i> <b>Русланчик</b>",
+                        "<i> Привет я</i> <b>Бот Помошник</b>, помогаю фильтровать чат и назначать встречи",
                            parse_mode="HTML",
                            reply_markup=kb)
 
@@ -45,6 +45,11 @@ async def command_description(message: Message):
 @dp.message(Command("help"))
 async def command_help(message: Message):
     await message.reply(help_commands, parse_mode="html")
+
+@dp.message(Command("example"))
+async def command_example(message: Message):
+    await message.answer(example, parse_mode="HTML")
+
 
 @dp.message(Command("fa_fa_watafa"))
 async def command_fa_fa_watafa(message: Message):
@@ -135,6 +140,18 @@ async def command_add(message: Message):
 
     except Exception as e:
         await message.answer(f"❌ Ошибка {str(e)}")
+
+@dp.message(Command("delete_activity"))
+async def command_delete_activity(message: Message):
+    id_user = message.from_user.id
+    name_activity = message.text.replace("/delete_activity", "").rstrip().lstrip()
+    del_row = await database_of_activity.delete_activity(name_activity, id_user)
+
+    if del_row:
+        await message.answer(f"{name_activity} успешно удаленно из расписания")
+        return
+
+    await message.answer(f"В вашем расписание нет {name_activity}")
 
 @dp.message(Command("find_geopos"))
 async def command_find_geopos(message: Message):

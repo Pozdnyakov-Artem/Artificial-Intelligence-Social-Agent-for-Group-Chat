@@ -213,3 +213,14 @@ async def delete_activity(name_activity, user_id):
 
         await db.commit()
         return cursor.rowcount
+
+
+async def schedule_on_day(user_id, date):
+    async with aiosqlite.connect("database.db") as db:
+        cursor = await db.execute('''
+        SELECT start_time, end_time, activity_name
+        FROM schedules
+        WHERE user_id = ? AND date = ?
+        ORDER BY start_time DESC''', (user_id, date))
+
+        return await cursor.fetchall()

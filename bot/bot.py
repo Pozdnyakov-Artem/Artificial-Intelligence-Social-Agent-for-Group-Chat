@@ -60,6 +60,27 @@ async def command_fa_fa_watafa(message: Message):
 async def command_Ruslanchik(message: Message):
     await message.answer("@smglvrus, лошарик")
 
+@dp.message(Command("schedule"))
+async def command_schedule(message: Message):
+    text = message.text.replace("/schedule", "").rstrip().lstrip()
+
+    if await validate_date(text):
+        result = await database_of_activity.schedule_on_day(message.from_user.id, text)
+
+        if not result:
+            await message.answer("На этот день ничего не запланировано")
+            return
+
+        msg=""
+
+        for act in result:
+            msg+=f"Начало: {act[0]}  Конец: {act[1]}  {act[2]}"
+
+        await message.answer(msg)
+    else:
+        await message.answer("Вы ввели некорректную дату")
+
+
 @dp.message(Command("add_users"))
 async def command_add_users(message: Message):
     try:
@@ -189,6 +210,9 @@ async def parse_time(date: str):
     return date
 
 async def validate_date(date: str):
+    print(len(date))
+    if len(date) != 10 and date not in ["сегодня", "завтра", "послезавтра"]:
+        return False
     prep_date = await parse_time(date)
 
     try:

@@ -3,6 +3,8 @@ import logging
 from collections import deque, defaultdict
 from datetime import datetime
 from typing import Optional, Dict, Any
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 
 # Импорты aiogram
@@ -11,7 +13,7 @@ from aiogram.types import Message, ReplyKeyboardRemove
 from aiogram.filters import Command, CommandStart
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-
+import torch
 # Импорты для нейросетей
 from transformers import pipeline, AutoTokenizer, AutoModel
 from sklearn.metrics.pairwise import cosine_similarity
@@ -70,6 +72,9 @@ class ConversationTopicManager:
         self.tokenizer = None
         self.model = None
 
+        # 🔄 ПУЛ ПОТОКОВ ДЛЯ АСИНХРОННОЙ ОБРАБОТКИ НЕЙРОСЕТЕЙ
+        self.thread_pool = ThreadPoolExecutor(max_workers=2)
+
         # 🔄 ИНИЦИАЛИЗАЦИЯ МОДЕЛЕЙ
         asyncio.create_task(self._initialize_models())
 
@@ -79,14 +84,21 @@ class ConversationTopicManager:
             logger.info("🔄 Загрузка моделей нейросетей...")
 
             # Используем легкую модель для быстрой загрузки
-            self.topic_classifier = pipeline(
-                "zero-shot-classification",
-                model="valhalla/distilbart-mnli-12-1"
-            )
+            def load_classifier():
+                return pipeline(
+                    "zero-shot-classification",
+                    model="valhalla/distilbart-mnli-12-1"
+                )
 
-            # Модель для эмбеддингов
-            self.tokenizer = AutoTokenizer.from_pretrained('cointegrated/rubert-tiny')
-            self.model = AutoModel.from_pretrained('cointegrated/rubert-tiny')
+            def load_embedding_model():
+                tokenizer = AutoTokenizer.from_pretrained('cointegrated/rubert-tiny')
+                model = AutoModel.from_pretrained('cointegrated/rubert-tiny')
+                return tokenizer, model
+
+            # Загружаем модели в отдельном потоке
+            loop = asyncio.get_event_loop()
+            self.topic_classifier = await loop.run_in_executor(self.thread_pool, load_classifier)
+            self.tokenizer, self.model = await loop.run_in_executor(self.thread_pool, load_embedding_model)
 
             logger.info("✅ Модели успешно загружены!")
 
@@ -94,8 +106,8 @@ class ConversationTopicManager:
             logger.error(f"❌ Ошибка загрузки моделей: {e}")
             self.topic_classifier = None
 
-    def get_text_embedding(self, text: str) -> np.ndarray:
-        """СОЗДАНИЕ ВЕКТОРНОГО ПРЕДСТАВЛЕНИЯ ТЕКСТА"""
+    def _get_text_embedding_sync(self, text: str) -> np.ndarray:
+        """СИНХРОННОЕ СОЗДАНИЕ ВЕКТОРНОГО ПРЕДСТАВЛЕНИЯ ТЕКСТА"""
         try:
             if self.tokenizer is None or self.model is None:
                 return np.zeros((1, 312))
@@ -118,11 +130,16 @@ class ConversationTopicManager:
             logger.error(f"Ошибка создания эмбеддинга: {e}")
             return np.zeros((1, 312))
 
-    def calculate_similarity(self, text1: str, text2: str) -> float:
-        """ВЫЧИСЛЕНИЕ СХОЖЕСТИ ДВУХ ТЕКСТОВ"""
+    async def get_text_embedding(self, text: str) -> np.ndarray:
+        """АСИНХРОННОЕ СОЗДАНИЕ ВЕКТОРНОГО ПРЕДСТАВЛЕНИЯ ТЕКСТА"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self.thread_pool, self._get_text_embedding_sync, text)
+
+    def _calculate_similarity_sync(self, text1: str, text2: str) -> float:
+        """СИНХРОННОЕ ВЫЧИСЛЕНИЕ СХОЖЕСТИ ДВУХ ТЕКСТОВ"""
         try:
-            emb1 = self.get_text_embedding(text1)
-            emb2 = self.get_text_embedding(text2)
+            emb1 = self._get_text_embedding_sync(text1)
+            emb2 = self._get_text_embedding_sync(text2)
             similarity = cosine_similarity(emb1, emb2)[0][0]
             return similarity
 
@@ -130,8 +147,13 @@ class ConversationTopicManager:
             logger.error(f"Ошибка вычисления схожести: {e}")
             return 0.0
 
+    async def calculate_similarity(self, text1: str, text2: str) -> float:
+        """АСИНХРОННОЕ ВЫЧИСЛЕНИЕ СХОЖЕСТИ ДВУХ ТЕКСТОВ"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self.thread_pool, self._calculate_similarity_sync, text1, text2)
+
     async def analyze_conversation_topic(self) -> tuple[Optional[str], float]:
-        """АНАЛИЗ ОСНОВНОЙ ТЕМЫ РАЗГОВОРА"""
+        """АСИНХРОННЫЙ АНАЛИЗ ОСНОВНОЙ ТЕМЫ РАЗГОВОРА"""
         if len(self.conversation_history) < self.min_messages_for_topic:
             return None, 0.0
 
@@ -142,11 +164,16 @@ class ConversationTopicManager:
             recent_messages = list(self.conversation_history)[-10:]
             conversation_text = " ".join([msg['text'] for msg in recent_messages])
 
-            result = self.topic_classifier(
-                conversation_text,
-                self.topic_candidates,
-                multi_label=False
-            )
+            def classify_text():
+                return self.topic_classifier(
+                    conversation_text,
+                    self.topic_candidates,
+                    multi_label=False
+                )
+
+            # Асинхронный вызов классификации
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(self.thread_pool, classify_text)
 
             main_topic = result['labels'][0]
             confidence = result['scores'][0]
@@ -159,12 +186,12 @@ class ConversationTopicManager:
             return None, 0.0
 
     async def check_message_relevance(self, text: str) -> tuple[bool, str]:
-        """ПРОВЕРКА РЕЛЕВАНТНОСТИ СООБЩЕНИЯ"""
+        """АСИНХРОННАЯ ПРОВЕРКА РЕЛЕВАНТНОСТИ СООБЩЕНИЯ"""
         if not self.topic_established or not self.current_main_topic:
             return True, "Тема еще не установлена"
 
         try:
-            similarity = self.calculate_similarity(text, self.current_main_topic)
+            similarity = await self.calculate_similarity(text, self.current_main_topic)
 
             if similarity >= self.similarity_threshold:
                 return True, f"Сообщение соответствует теме '{self.current_main_topic}'"
@@ -176,7 +203,7 @@ class ConversationTopicManager:
             return True, "Ошибка проверки"
 
     async def process_message(self, text: str, user_id: int) -> Dict[str, Any]:
-        """ОБРАБОТКА НОВОГО СООБЩЕНИЯ"""
+        """АСИНХРОННАЯ ОБРАБОТКА НОВОГО СООБЩЕНИЯ"""
         current_time = datetime.now()
 
         # 🔄 ПРОВЕРКА СБРОСА ТЕМЫ
@@ -195,7 +222,7 @@ class ConversationTopicManager:
 
         logger.info(f"💬 Сообщение от {user_id}: {text[:50]}...")
 
-        # 🎯 ОПРЕДЕЛЕНИЕ ТЕМЫ
+        # 🎯 АСИНХРОННОЕ ОПРЕДЕЛЕНИЕ ТЕМЫ
         main_topic, confidence = await self.analyze_conversation_topic()
 
         if main_topic and confidence >= self.confidence_threshold:
@@ -205,7 +232,7 @@ class ConversationTopicManager:
             if not self.topic_start_time:
                 self.topic_start_time = current_time
 
-        # 🔍 ПРОВЕРКА РЕЛЕВАНТНОСТИ
+        # 🔍 АСИНХРОННАЯ ПРОВЕРКА РЕЛЕВАНТНОСТИ
         is_relevant, reason = await self.check_message_relevance(text)
 
         return {
@@ -304,22 +331,28 @@ class TopicBot:
 
         # 🚫 ПРОПУСК КОРОТКИХ СООБЩЕНИЙ
         if len(text.strip()) < 3:
+            await message.answer("❌ Сообщение слишком короткое для анализа")
             return
 
         logger.info(f"👤 {user.full_name} ({user.id}): {text}")
 
-        # 🧠 ОБРАБОТКА В МЕНЕДЖЕРЕ ТЕМЫ
-        result = await self.topic_manager.process_message(text, user.id)
+        try:
+            # 🧠 АСИНХРОННАЯ ОБРАБОТКА В МЕНЕДЖЕРЕ ТЕМЫ
+            result = await self.topic_manager.process_message(text, user.id)
 
-        # 🔄 УВЕДОМЛЕНИЕ О СБРОСЕ ТЕМЫ
-        if result.get('topic_reset'):
-            await self._notify_topic_change(message, result)
+            # 🔄 УВЕДОМЛЕНИЕ О СБРОСЕ ТЕМЫ
+            if result.get('topic_reset'):
+                await self._notify_topic_change(message, result)
 
-        # ✅/❌ ОБРАБОТКА РЕЛЕВАНТНОСТИ
-        if result['topic_established'] and not result['is_relevant']:
-            await self.handle_irrelevant_message(message, result, user)
-        else:
-            await self.handle_relevant_message(message, result, user)
+            # ✅/❌ ОБРАБОТКА РЕЛЕВАНТНОСТИ
+            if result['topic_established'] and not result['is_relevant']:
+                await self.handle_irrelevant_message(message, result, user)
+            else:
+                await self.handle_relevant_message(message, result, user)
+
+        except Exception as e:
+            logger.error(f"Ошибка обработки сообщения: {e}")
+            await message.answer("❌ Произошла ошибка при обработке сообщения")
 
     async def handle_irrelevant_message(self, message: Message, result: dict, user):
         """
@@ -483,7 +516,7 @@ class TopicBot:
                 f"🎯 <b>Текущая тема:</b> {self.topic_manager.current_main_topic}\n"
                 f"📊 <b>Уверенность:</b> {self.topic_manager.topic_confidence:.1%}\n"
                 f"💬 <b>Сообщений в истории:</b> {len(self.topic_manager.conversation_history)}\n"
-                f"🕒 <b>Тема установлена:</b> {self.topic_manager.topic_established}"
+                f"🕒 <b>Тема установлена:</b> {self.topic_manager.topic_start_time.strftime('%H:%M:%S') if self.topic_manager.topic_start_time else 'Нет'}"
             )
         else:
             response_text = (
@@ -577,8 +610,10 @@ class TopicBot:
         finally:
             # 🔒 ЗАКРЫТИЕ СЕССИИ
             await self.bot.session.close()
+            # 🔒 ЗАКРЫТИЕ ПУЛА ПОТОКОВ
+            self.topic_manager.thread_pool.shutdown(wait=True)
 
-token = "8250049999:AAGZYbqKzYZgwK-q2QlUtW3iJNQbOQ3DFUY"
+
 # 🚀 ТОЧКА ВХОДА
 async def main():
     """
@@ -586,7 +621,7 @@ async def main():
     """
 
     # 🔑 ВАШ ТОКЕН БОТА
-    BOT_TOKEN = "8250049999:AAGZYbqKzYZgwK-q2QlUtW3iJNQbOQ3DFUY"  # ⚠️ ЗАМЕНИТЕ НА РЕАЛЬНЫЙ ТОКЕН!
+    BOT_TOKEN = "8250049999:AAGZYbqKzYZgwK-q2QlUtW3iJNQbOQ3DFUY"
 
     if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
         print("❌ ОШИБКА: Замените BOT_TOKEN на реальный токен от @BotFather!")

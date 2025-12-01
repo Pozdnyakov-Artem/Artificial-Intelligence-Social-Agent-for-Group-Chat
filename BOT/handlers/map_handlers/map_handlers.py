@@ -17,15 +17,17 @@ class MapHandlers:
         self.register_handler()
 
     def register_handler(self):
-        self.router.message.register(self.cmd_get_nearest_places, Command("get_nearest_places"))
+        self.router.message.register(self.cmd_find_nearest_places, Command("find_nearest_places"))
 
-    async def cmd_get_nearest_places(self, message: Message):
-        address = message.text.replace("/find_places_near", "")
-        coords = await address_to_coordinates(address)
+    async def cmd_find_nearest_places(self, message: Message):
+        address = message.text.replace("/find_nearest_places", "")
+        coords = await address_to_coordinates(self.base_url, self.headers,address)
         if not coords:
             await message.answer("Некорректный адрес")
             return
         lat, lng = coords
         places = await get_top_5_places(self.overpass_url,lat, lng)
-        await format_results(places)
+        # print(places)
+        result_text = await format_results(places)
+        await message.answer(f"{result_text}", parse_mode="HTML")
         return

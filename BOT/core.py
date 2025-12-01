@@ -22,12 +22,11 @@ class TelegramBot:
         self._register_routers()
 
     def _init_databases(self):
-        self.chat_messages_db = DBOfMessage("../.venv/data/chat_messages.db")
-        self.user_schedule_db = ScheduleUserDB("../.venv/data/user_schedule.db")
-        self.chat_users_db = ChatUsersDB("../.venv/data/chat_users.db")
+        self.chat_messages_db = DBOfMessage("./data/chat_messages.db")
+        self.user_schedule_db = ScheduleUserDB("./data/user_schedule.db")
+        self.chat_users_db = ChatUsersDB("./data/chat_users.db")
 
     def _init_handlers(self):
-        """Создание всех обработчиков с передачей зависимостей"""
         self.base_handlers = BaseHandlers()
 
         self.moderation_handlers = ModerationHandlers(
@@ -38,6 +37,7 @@ class TelegramBot:
         self.schedule_handlers = ScheduleHandlers(
             bot=self.bot,
             database_of_activity=self.user_schedule_db,
+            database_of_users=self.chat_users_db
         )
 
         self.map_handlers = MapHandlers()
@@ -55,7 +55,6 @@ class TelegramBot:
         self.dp.include_router(self.moderation_handlers.router)
 
     async def on_startup(self):
-        """Выполняется при запуске бота"""
         print("=" * 50)
         print("🤖 Запуск бота для организации встреч")
         print("=" * 50)
@@ -77,9 +76,8 @@ class TelegramBot:
         print("👋 Бот завершил работу")
 
     async def start(self):
-        """Основной метод запуска бота"""
         try:
-            # Запускаем long-polling
+            await self.bot.delete_webhook(drop_pending_updates=True)
             await self.dp.start_polling(
                 self.bot,
                 allowed_updates=self.dp.resolve_used_update_types()
@@ -88,6 +86,5 @@ class TelegramBot:
             print(f"Критическая ошибка при запуске: {e}")
             raise
         finally:
-            # Гарантируем вызов shutdown
             await self.on_shutdown()
 

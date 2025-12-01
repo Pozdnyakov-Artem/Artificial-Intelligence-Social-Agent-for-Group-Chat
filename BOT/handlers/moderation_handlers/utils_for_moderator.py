@@ -24,7 +24,7 @@ async def check_similarity_of_the_mes_and_top(chat_id: int, text: str, database,
 
     context = ','.join([message[0] for message in context])
 
-    embedding_context = model.model.encode([context])
+    embedding_context = model.encode([context])
 
     if cosine_similarity(model.encode([text]), embedding_context)[0][0] > confidence_threshold:
         return True

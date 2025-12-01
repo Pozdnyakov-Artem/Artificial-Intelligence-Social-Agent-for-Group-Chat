@@ -174,25 +174,20 @@ async def get_place_emoji(place_type: str) -> str:
     return emoji_map.get(place_type, '🏢')
 
 async def format_results(places: List[Dict]) -> str:
-    """Форматирует результаты для красивого вывода"""
     if not places:
         return "❌ В радиусе 1 км не найдено заведений"
 
     result = ["📍 **Топ-5 ближайших заведений:**\n"]
 
     for i, place in enumerate(places, 1):
-        # Определяем эмодзи для типа заведения
         emoji = await get_place_emoji(place['type'])
 
-        # Форматируем расстояние
         distance_str = f"🚶 {int(place['distance'])}м"
 
-        # Дополнительная информация
         details = []
         if place.get('cuisine'):
             details.append(f"🍴 {place['cuisine']}")
         if place.get('opening_hours'):
-            # Обрезаем длинные строки с часами работы
             hours = place['opening_hours']
             if len(hours) > 30:
                 hours = hours[:30] + "..."
@@ -202,7 +197,6 @@ async def format_results(places: List[Dict]) -> str:
         if details_str:
             details_str = f"\n   {details_str}"
 
-        # Формируем текст для каждого места
         place_text = f"""
             {i}. {emoji} **{place['name']}**
                📍 {place['address']}

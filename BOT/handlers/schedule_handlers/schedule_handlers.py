@@ -5,11 +5,12 @@ from BOT.handlers.schedule_handlers.utils_for_schedule_handlers import validate_
 
 
 class ScheduleHandlers:
-    def __init__(self, bot: Bot, database_of_activity):
+    def __init__(self, bot: Bot, database_of_activity, database_of_users):
         self.bot = bot
         self.router = Router()
         self.register_handlers()
         self.database = database_of_activity
+        self.database_of_users = database_of_users
 
     def register_handlers(self):
         self.router.message.register(self.cmd_schedule, Command("schedule"))
@@ -30,7 +31,7 @@ class ScheduleHandlers:
             msg = ""
 
             for act in result:
-                msg += f"Начало: {act[0]}  Конец: {act[1]}  {act[2]}"
+                msg += f"Начало: {act[0]}  Конец: {act[1]}  {act[2]}\n"
 
             await message.answer(msg)
         else:
@@ -38,7 +39,7 @@ class ScheduleHandlers:
 
     async def cmd_find_free_time(self, message: Message):
         chat_id = message.chat.id
-        chat_users = await self.database.get_users_of_chat(chat_id)
+        chat_users = await self.database_of_users.get_users_of_chat(chat_id)
 
         if len(chat_users) == 0:
             await message.answer("Вы не добавили пользователей чата. Добавьте через команду <b>/add_users</b>",

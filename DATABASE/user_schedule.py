@@ -27,12 +27,9 @@ class ScheduleUserDB:
             SELECT date, start_time, end_time, activity_name from schedules
             WHERE user_id = ? AND date = ?
             and (
-                (start_time <= ? AND end_time >= ?) OR
-                (start_time >= ? AND end_time <= ?) OR
-                (start_time <= ? AND end_time <= ?) OR
-                (start_time >= ? AND end_time >= ?))'''
+                ? < end_time AND ? > start_time)'''
 
-            params = [user_id, date, start_time, end_time, start_time, end_time, start_time, end_time, start_time, end_time]
+            params = [user_id, date, start_time, end_time]
 
             cursor = await db.execute(quary, params)
             conflict = await cursor.fetchall()
@@ -96,7 +93,7 @@ class ScheduleUserDB:
         try:
             async with aiosqlite.connect(self.path) as db:
                 params = [*user_ids, start_date, end_date]
-                print(params)
+                # print(params)
                 cursor = await db.execute(query, params)
                 rows = await cursor.fetchall()
 
@@ -173,7 +170,7 @@ class ScheduleUserDB:
         activities_df = await self.get_activities_from_db(user_ids, days_range)
 
         if activities_df.empty:
-            print("Нет данных об активностях для указанных пользователей")
+            # print("Нет данных об активностях для указанных пользователей")
             all_free_periods = []
             for day_offset in range(days_range):
                 current_day = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=day_offset)
@@ -217,7 +214,7 @@ class ScheduleUserDB:
 
 
     async def schedule_on_day(self, user_id, date):
-        async with aiosqlite.connect("database.db") as db:
+        async with aiosqlite.connect(self.path) as db:
             cursor = await db.execute('''
             SELECT start_time, end_time, activity_name
             FROM schedules

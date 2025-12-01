@@ -1,7 +1,7 @@
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
-
+from .utils_for_user_handlers import *
 
 class UserHandlers:
     def __init__(self, bot, database):
@@ -29,7 +29,7 @@ class UserHandlers:
 
             for user_id in user_ids:
                 us_id = int(user_id)
-                result = await self.database.check_user_in_chat_by_username(self.bot, chat_id, us_id)
+                result = await check_user_in_chat_by_username(self.bot, chat_id, us_id)
                 if not result['found'] or not result['in_chat']:
                     text += '\n' + result['message']
                     continue

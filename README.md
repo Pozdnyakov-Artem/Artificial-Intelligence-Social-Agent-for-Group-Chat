@@ -23,6 +23,7 @@ Telegram бот для организации встреч и модерации
 - Личные предупреждения пользователям
 - Настраиваемый порог схожести текста
 
+```
 Artificial-Intelligence-Social-Agent-for-Group-Chat/
 │
 ├── data/                          # Директория для файлов базы данных
@@ -40,7 +41,6 @@ Artificial-Intelligence-Social-Agent-for-Group-Chat/
 │   │
 │   └── handlers/                 # Обработчики команд
 │       ├── base_handlers/        # Базовые команды
-│       │   ├── __init__.py
 │       │   ├── base_handlers.py
 │       │   └── utils_for_base_handlers.py
 │       │
@@ -64,3 +64,4 @@ Artificial-Intelligence-Social-Agent-for-Group-Chat/
 ├── main.py                       # Точка входа
 ├── README.md                     # Документация
 └── .env.example                  # Пример файла с токеном
+```

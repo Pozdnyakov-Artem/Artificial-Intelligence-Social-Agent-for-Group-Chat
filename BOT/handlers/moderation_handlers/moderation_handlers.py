@@ -24,6 +24,7 @@ class ModerationHandlers:
         text = message.text.replace("/set_topic", "").rstrip().lstrip()
         if len(text) == 0:
             await message.answer("Вы не указали новую тему")
+            return
 
         await self.database.save_message(message.chat.id, text)
 

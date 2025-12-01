@@ -203,7 +203,7 @@ class ScheduleUserDB:
         return all_free_periods
 
     async def delete_activity(self, name_activity, user_id):
-        async with aiosqlite.connect("database.db") as db:
+        async with aiosqlite.connect(self.path) as db:
             cursor = await db.execute('''
             DELETE FROM schedules
             WHERE user_id = ? AND activity_name = ?

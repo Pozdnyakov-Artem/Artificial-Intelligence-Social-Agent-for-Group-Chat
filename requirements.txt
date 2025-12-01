@@ -1,0 +1,11 @@
+aiogram
+aiosqlite
+sentence-transformers
+scikit-learn
+pandas
+numpy
+aiohttp
+requests
+torch
+transformers
+python-dateutil

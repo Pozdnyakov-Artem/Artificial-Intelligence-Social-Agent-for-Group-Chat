@@ -134,7 +134,7 @@ async def get_top_5_places(overpass_url,latitude: float, longitude: float, radiu
     """
     # Overpass QL запрос для поиска заведений
     overpass_query = f"""
-    [out:json][timeout:25];
+    [out:json][timeout:5];
     (
       node["amenity"~"cafe|restaurant|bar|pub|fast_food|biergarten"]
         (around:{radius},{latitude},{longitude});
@@ -177,7 +177,7 @@ async def format_results(places: List[Dict]) -> str:
     if not places:
         return "❌ В радиусе 1 км не найдено заведений"
 
-    result = ["📍 **Топ-5 ближайших заведений:**\n"]
+    result = ["📍 <b>Топ-5 ближайших заведений:</b>\n"]
 
     for i, place in enumerate(places, 1):
         emoji = await get_place_emoji(place['type'])
@@ -198,7 +198,7 @@ async def format_results(places: List[Dict]) -> str:
             details_str = f"\n   {details_str}"
 
         place_text = f"""
-            {i}. {emoji} **{place['name']}**
+            {i}. {emoji} <b>{place['name']}</b>
                📍 {place['address']}
                {distance_str}{details_str}
                         """.strip()

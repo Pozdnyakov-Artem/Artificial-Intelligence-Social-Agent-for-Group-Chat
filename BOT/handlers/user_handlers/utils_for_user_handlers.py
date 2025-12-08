@@ -14,9 +14,7 @@ async def user_in_chat(bot: Bot, chat_id: int, user_id: int):
         return False
 
 async def check_user_in_chat_by_username(bot: Bot, chat_id: int,us_id:int) -> dict:
-    # if username[0] == '@':
-    #     username = username[1:]
-    # user_id = await get_user_id_by_username(bot,chat_id, username)
+
     try:
         user_id = await bot.get_chat(us_id)
     except TelegramBadRequest as e:
